@@ -14,7 +14,10 @@ import (
 	"github.com/alibaba/pairec/v2/recconf"
 	"github.com/alibaba/pairec/v2/service"
 	"github.com/alibaba/pairec/v2/utils"
-	"github.com/aliyun/aliyun-pairec-config-go-sdk/v2/model"
+	pairecModel "github.com/aliyun/aliyun-pairec-config-go-sdk/v2/model" // Aliased
+	"os"                                                                  // Added
+	"github.com/alibaba/pairec/v2/paiabtest"                            // Added
+	paiModel "github.com/aliyun/aliyun-pai-ab-go-sdk/model"             // Added
 )
 
 const (
@@ -163,14 +166,53 @@ func (c *RecommendController) makeRecommendContext() {
 	c.context.RecommendId = c.RequestId
 	c.context.Config = recconf.Config
 
-	abcontext := model.ExperimentContext{
-		Uid:          c.param.Uid,
-		RequestId:    c.RequestId,
-		FilterParams: map[string]interface{}{},
+	abProvider := os.Getenv("ABTEST_PROVIDER")
+	if abProvider == "" {
+		abProvider = "pairec" // Default to pairec
 	}
 
-	if abtest.GetExperimentClient() != nil {
-		c.context.ExperimentResult = abtest.GetExperimentClient().MatchExperiment(c.param.SceneId, &abcontext)
-		log.Info(c.context.ExperimentResult.Info())
+	log.Info(fmt.Sprintf("Using ABTEST_PROVIDER: %s", abProvider))
+
+	if abProvider == "pai" {
+		paiClient := paiabtest.GetClient()
+		if paiClient == nil {
+			log.Warning("PAI A/B Test client (paiabtest.GetClient) is nil. Skipping PAI A/B experiment.")
+		} else {
+			// Ensure c.param.Features is not nil, as PAI SDK might expect non-nil map
+			sceneParams := c.param.Features
+			if sceneParams == nil {
+				sceneParams = make(map[string]interface{})
+			}
+			paiResult, err := paiabtest.MatchPaiExperiment(c.param.Uid, c.RequestId, sceneParams)
+			if err != nil {
+				log.Error(fmt.Sprintf("Error calling MatchPaiExperiment: %v", err))
+			} else if paiResult == nil {
+				log.Warning("MatchPaiExperiment returned nil result.")
+			} else {
+				c.context.ExperimentResult = paiResult // Assigning *paiModel.ExperimentResult to interface{}
+				log.Info(fmt.Sprintf("PAI A/B Test Result Info: %s", paiResult.Info()))
+			}
+		}
+	} else { // "pairec" or default
+		if abtest.GetExperimentClient() != nil {
+			abcontext := pairecModel.ExperimentContext{ // Use aliased model
+				Uid:          c.param.Uid,
+				RequestId:    c.RequestId,
+				FilterParams: c.param.Features, // Pass c.param.Features, ensure it's map[string]interface{}
+			}
+			if abcontext.FilterParams == nil {
+				abcontext.FilterParams = make(map[string]interface{})
+			}
+
+			pairecResult := abtest.GetExperimentClient().MatchExperiment(c.param.SceneId, &abcontext)
+			if pairecResult != nil {
+				c.context.ExperimentResult = pairecResult // Assigning *pairecModel.ExperimentResult to interface{}
+				log.Info(fmt.Sprintf("Pairec A/B Test Result Info: %s", pairecResult.Info()))
+			} else {
+				log.Warning("Pairec A/B Test MatchExperiment returned nil result.")
+			}
+		} else {
+			log.Warning("Pairec A/B Test client (abtest.GetExperimentClient) is nil. Skipping Pairec A/B experiment.")
+		}
 	}
 }

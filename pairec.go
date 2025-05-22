@@ -11,10 +11,13 @@ import (
 	"github.com/alibaba/pairec/v2/datasource/hbase_thrift"
 	"github.com/alibaba/pairec/v2/datasource/kafka"
 	"github.com/alibaba/pairec/v2/datasource/opensearch"
+	"fmt" // Added for logging ABTEST_PROVIDER
 
 	"github.com/alibaba/pairec/v2/abtest"
 	"github.com/alibaba/pairec/v2/algorithm"
 	"github.com/alibaba/pairec/v2/config"
+	"github.com/alibaba/pairec/v2/log" // Added for logging ABTEST_PROVIDER
+	"github.com/alibaba/pairec/v2/paiabtest" // Added for PAI ABTest provider
 	"github.com/alibaba/pairec/v2/datasource/beengine"
 	"github.com/alibaba/pairec/v2/datasource/datahub"
 	"github.com/alibaba/pairec/v2/datasource/ha3engine"
@@ -66,7 +69,20 @@ func Run() {
 	// if CONFIG_NAME is set, so load the pairec config from abtest server
 	// first create the abtest client connect to the server use the env params
 	if configName != "" {
-		abtest.LoadFromEnvironment()
+		// Determine which AB test provider to use
+		abProvider := os.Getenv("ABTEST_PROVIDER")
+		log.Info(fmt.Sprintf("ABTEST_PROVIDER set to: %s", abProvider)) // Optional: for debugging
+
+		if abProvider == "pai" {
+			paiabtest.LoadFromEnvironment() // Initialize PAI ABTest client
+			log.Info("Using PAI ABTest provider.")
+		} else {
+			abtest.LoadFromEnvironment() // Initialize Pairec ABTest client (default)
+			if abProvider != "pairec" && abProvider != "" {
+				log.Warning(fmt.Sprintf("Unrecognized ABTEST_PROVIDER value: '%s'. Defaulting to 'pairec'.", abProvider))
+			}
+			log.Info("Using Pairec ABTest provider.")
+		}
 		ListenConfig(configName)
 	} else {
 		// load config from local file

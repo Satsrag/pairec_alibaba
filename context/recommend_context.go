@@ -8,7 +8,7 @@ import (
 
 	"github.com/alibaba/pairec/v2/log"
 	"github.com/alibaba/pairec/v2/recconf"
-	"github.com/aliyun/aliyun-pairec-config-go-sdk/v2/model"
+	// "github.com/aliyun/aliyun-pairec-config-go-sdk/v2/model" // No longer directly used for ExperimentResult type
 	"github.com/tidwall/gjson"
 )
 
@@ -20,7 +20,7 @@ type RecommendContext struct {
 	Size             int
 	Param            IParam
 	Config           *recconf.RecommendConfig
-	ExperimentResult *model.ExperimentResult
+	ExperimentResult interface{} // Changed to interface{}
 	RecommendId      string
 	ExpId            string
 	Log              []string
