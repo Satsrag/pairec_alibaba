@@ -70,6 +70,7 @@ func Run() {
 		abtest.LoadFromEnvironment()
 		ListenConfig(configName)
 	} else {
+		abtest.LoadFromEnvironment()
 		// load config from local file
 		err := recconf.LoadConfig(configFile)
 		if err != nil {
