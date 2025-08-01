@@ -3,7 +3,6 @@ package pai
 import (
 	"crypto/sha1"
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"reflect"
@@ -290,6 +289,18 @@ func convertExperimentToGroup(experiment *paiabtestmodel.Experiment, layerId int
 	}
 	log.Printf("[PAI-AB] Converting experiment '%s' (ID: %d) to ExperimentGroup", experiment.ExpName, experiment.ExpId)
 
+	// 输出PAI实验的完整参数用于调试
+	log.Printf("[PAI-AB] PAI Experiment parameters:")
+	log.Printf("[PAI-AB]   - ExpId: %d", experiment.ExpId)
+	log.Printf("[PAI-AB]   - ExpName: '%s'", experiment.ExpName)
+	log.Printf("[PAI-AB]   - ExpInfo: '%s'", experiment.ExpInfo)
+	log.Printf("[PAI-AB]   - DebugUsers: '%s'", experiment.DebugUsers)
+	log.Printf("[PAI-AB]   - Owner: '%s'", experiment.Owner)
+	log.Printf("[PAI-AB]   - Filter: '%s'", experiment.Filter)
+	log.Printf("[PAI-AB]   - Buckets: '%s'", experiment.Buckets)
+	log.Printf("[PAI-AB]   - Status: %d", experiment.Status)
+	log.Printf("[PAI-AB]   - ExperimentVersions count: %d", len(experiment.ExperimentVersions()))
+
 	// 确定分流类型
 	crowdTargetType := determineCrowdTargetType(experiment)
 	log.Printf("[PAI-AB] Experiment '%s' crowd target type: %s (DebugUsers: '%s', Filter: '%s', Buckets: '%s')",
@@ -330,18 +341,26 @@ func convertExperimentToGroup(experiment *paiabtestmodel.Experiment, layerId int
 	// 输出详细的分流配置用于调试
 	log.Printf("[PAI-AB] ExperimentGroup '%s' initialized with:", expGroup.ExpGroupName)
 	log.Printf("[PAI-AB]   - ExpGroupId: %d", expGroup.ExpGroupId)
-	log.Printf("[PAI-AB]   - CrowdTargetType: %s", expGroup.CrowdTargetType)
+	log.Printf("[PAI-AB]   - LayerId: %d", expGroup.LayerId)
+	log.Printf("[PAI-AB]   - ExpRoomId: %d", expGroup.ExpRoomId)
+	log.Printf("[PAI-AB]   - SceneId: %d", expGroup.SceneId)
+	log.Printf("[PAI-AB]   - ExpGroupName: '%s'", expGroup.ExpGroupName)
+	log.Printf("[PAI-AB]   - ExpGroupInfo: '%s'", expGroup.ExpGroupInfo)
 	log.Printf("[PAI-AB]   - DebugUsers: '%s'", expGroup.DebugUsers)
+	log.Printf("[PAI-AB]   - DebugCrowdId: %d", expGroup.DebugCrowdId)
+	log.Printf("[PAI-AB]   - Owner: '%s'", expGroup.Owner)
 	log.Printf("[PAI-AB]   - Filter: '%s'", expGroup.Filter)
+	log.Printf("[PAI-AB]   - DistributionType: %d", expGroup.DistributionType)
+	log.Printf("[PAI-AB]   - DistributionTimeDuration: %d", expGroup.DistributionTimeDuration)
+	log.Printf("[PAI-AB]   - CrowdId: %d", expGroup.CrowdId)
+	log.Printf("[PAI-AB]   - ExpGroupConfig: '%s'", expGroup.ExpGroupConfig)
 	log.Printf("[PAI-AB]   - ReserveBuckets: '%s'", expGroup.ReserveBuckets)
-	log.Printf("[PAI-AB]   - HoldingBuckets: '%s'", expGroup.HoldingBuckets)
 	log.Printf("[PAI-AB]   - Status: %d", expGroup.Status)
-
-	// 测试用户898964的hash计算
-	testUserId := "898964"
-	hashValue := hashString(testUserId + "_" + fmt.Sprintf("%d", expGroup.ExpGroupId))
-	bucketId := hashValue % 100
-	log.Printf("[PAI-AB] TEST: User '%s' hash=%d, bucket=%d (should match if bucket in 0-99)", testUserId, hashValue, bucketId)
+	log.Printf("[PAI-AB]   - CrowdTargetType: '%s'", expGroup.CrowdTargetType)
+	log.Printf("[PAI-AB]   - HoldingBuckets: '%s'", expGroup.HoldingBuckets)
+	log.Printf("[PAI-AB]   - Experiments count: %d", len(expGroup.Experiments))
+	log.Printf("[PAI-AB]   - DebugCrowdUsers: %v", expGroup.DebugCrowdUsers)
+	log.Printf("[PAI-AB]   - CrowdUsers: %v", expGroup.CrowdUsers)
 
 	log.Printf("[PAI-AB] ExperimentGroup conversion completed: %d experiment versions converted", len(expGroup.Experiments))
 	return expGroup
@@ -354,22 +373,23 @@ func convertExperimentVersionToPairecExperiment(expVersion *paiabtestmodel.Exper
 		return nil
 	}
 	log.Printf("[PAI-AB] Converting experiment version '%s' (ID: %d) to Pairec Experiment", expVersion.ExpVersionName, expVersion.ExpVersionId)
+	log.Printf("[PAI-AB] ExperimentVersion DebugUsers: '%s'", expVersion.DebugUsers)
 
 	// 创建Pairec Experiment
 	pairecExperiment := &pairecmodel.Experiment{
-		ExperimentId:      int64(expVersion.ExpVersionId),    // ExperimentVersion ID映射到Experiment ID
-		ExpGroupId:        groupId,                           // 所属实验组ID
-		LayerId:           layerId,                           // 所属Layer ID
-		ExpRoomId:         roomId,                            // 所属Room ID
-		SceneId:           sceneId,                           // 所属Scene ID
-		ExperimentName:    expVersion.ExpVersionName,         // 实验版本名称映射到实验名称
-		ExperimentInfo:    expVersion.ExpVersionInfo,         // 实验版本信息映射到实验信息
-		Type:              uint32(expVersion.ExpVersionType), // 实验类型（1 对照组 2 实验组）
-		ExperimentFlow:    uint32(expVersion.ExperimentFlow), // 实验流量
-		ExperimentBuckets: expVersion.Buckets,                // 实验桶配置
-		DebugUsers:        expVersion.DebugUsers,             // 调试用户
+		ExperimentId:      int64(expVersion.ExpVersionId),                              // ExperimentVersion ID映射到Experiment ID
+		ExpGroupId:        groupId,                                                     // 所属实验组ID
+		LayerId:           layerId,                                                     // 所属Layer ID
+		ExpRoomId:         roomId,                                                      // 所属Room ID
+		SceneId:           sceneId,                                                     // 所属Scene ID
+		ExperimentName:    expVersion.ExpVersionName,                                   // 实验版本名称映射到实验名称
+		ExperimentInfo:    expVersion.ExpVersionInfo,                                   // 实验版本信息映射到实验信息
+		Type:              uint32(expVersion.ExpVersionType),                           // 实验类型（1 对照组 2 实验组）
+		ExperimentFlow:    uint32(expVersion.ExperimentFlow),                           // 实验流量
+		ExperimentBuckets: expVersion.Buckets,                                          // 实验桶配置
+		DebugUsers:        expVersion.DebugUsers,                                       // 调试用户
 		ExperimentConfig:  convertPaiConfigToPairecConfig(expVersion.ExpVersionConfig), // 实验配置参数（格式转换）
-		Status:            1,                                 // 默认状态
+		Status:            1,                                                           // 默认状态
 	}
 
 	// 初始化Experiment
@@ -419,7 +439,7 @@ func convertPaiConfigToPairecConfig(paiConfig string) string {
 	pairecConfig := make(map[string]interface{})
 	for _, item := range paiItems {
 		log.Printf("[PAI-AB] Processing config item: key=%s, value=%s, type=%s", item.Key, item.Value, item.Type)
-		
+
 		// 尝试解析value为JSON
 		var value interface{}
 		if err := json.Unmarshal([]byte(item.Value), &value); err != nil {
@@ -427,7 +447,7 @@ func convertPaiConfigToPairecConfig(paiConfig string) string {
 			log.Printf("[PAI-AB] WARN: Failed to parse value as JSON, using string: %v", err)
 			value = item.Value
 		}
-		
+
 		pairecConfig[item.Key] = value
 	}
 
