@@ -53,6 +53,7 @@ func NewPaiAbTestClient() *experiments.ExperimentClient {
 	}
 	log.Printf("[PAI-AB] AccessSecret configured (length: %d)", len(accessSecret))
 	config := paiabtestapi.NewConfiguration(region, accessId, accessSecret)
+	config.UseVpc(true)
 
 	// init client
 	paiAbTestClient, err := paiabtestexperiments.NewExperimentClient(config, paiabtestexperiments.WithLogger(paiabtestexperiments.LoggerFunc(log.Printf)))
