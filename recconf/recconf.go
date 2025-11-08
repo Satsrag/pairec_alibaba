@@ -582,6 +582,7 @@ type FeatureStoreConfig struct {
 	AccessId  string
 	AccessKey string
 	RegionId  string
+	TestMode  bool
 
 	ProjectName       string
 	FeatureDBUsername string

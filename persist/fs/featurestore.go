@@ -59,6 +59,11 @@ func Load(config *recconf.RecommendConfig) {
 				featurestore.WithErrorLogger(featurestore.LoggerFunc(l.Errorf)),
 				featurestore.WithFeatureDBLogin(conf.FeatureDBUsername, conf.FeatureDBPassword),
 				featurestore.WithHologresPort(hologresPort),
+				func(c *featurestore.FeatureStoreClient) {
+					if conf.TestMode {
+						featurestore.WithTestMode()(c)
+					}
+				},
 			)
 		} else {
 			client, err = featurestore.NewFeatureStoreClient(conf.RegionId, conf.AccessId, conf.AccessKey, conf.ProjectName,
@@ -67,6 +72,11 @@ func Load(config *recconf.RecommendConfig) {
 				featurestore.WithFeatureDBLogin(conf.FeatureDBUsername, conf.FeatureDBPassword),
 				featurestore.WithHologresPort(hologresPort),
 				featurestore.WithHologresLogin(conf.HologresUsername, conf.HologresPassword),
+				func(c *featurestore.FeatureStoreClient) {
+					if conf.TestMode {
+						featurestore.WithTestMode()(c)
+					}
+				},
 			)
 		}
 
