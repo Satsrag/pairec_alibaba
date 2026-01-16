@@ -245,6 +245,18 @@ func (f *PriorityAdjustCountFilter) doFilter(filterData *FilterData, ensureDiver
 		}
 	}
 
+	// 统计每个召回源的实际贡献
+	recallContribution := make(map[string]int)
+	for _, item := range newItems {
+		recallContribution[item.RetrieveId]++
+	}
+	// 输出配比日志
+	var contributions []string
+	for recallName, count := range recallContribution {
+		contributions = append(contributions, fmt.Sprintf("%s:%d", recallName, count))
+	}
+	filterData.Context.LogInfo(fmt.Sprintf("module=PriorityAdjustCountFilter\tname=%s\tcontributions=%v", f.name, contributions))
+
 	filterData.Data = newItems
 	filterInfoLog(filterData, "PriorityAdjustCountFilter", f.name, len(newItems), start)
 	return nil

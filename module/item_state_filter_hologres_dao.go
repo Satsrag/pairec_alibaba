@@ -173,7 +173,7 @@ func (d *ItemStateFilterHologresDao) Filter(user *User, items []*Item) (ret []*I
 				}
 
 				rowsChannel := make(chan *sql.Rows, 1)
-				ctx, cancel := gocontext.WithTimeout(gocontext.Background(), 200*time.Millisecond)
+				ctx, cancel := gocontext.WithTimeout(gocontext.Background(), 1000*time.Millisecond)
 				defer cancel()
 				// async invoke sql query
 				go func() {
@@ -201,7 +201,7 @@ func (d *ItemStateFilterHologresDao) Filter(user *User, items []*Item) (ret []*I
 				var rows *sql.Rows
 				select {
 				case <-ctx.Done():
-					log.Error(fmt.Sprintf("module=ItemStateFilterHologresDao\terror=hologres error(%v)", ctx.Err()))
+					log.Error(fmt.Sprintf("module=ItemStateFilterHologresDao\ttable=%s\terror=hologres error(%v)", d.table, ctx.Err()))
 					for _, id := range idlist {
 						fieldMap[id.(string)] = true
 					}
