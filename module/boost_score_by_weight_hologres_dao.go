@@ -47,8 +47,17 @@ func (s *BoostScoreByWeightByWeightHologresDao) Sort(items []*Item) []*Item {
 
 	for _, item := range items {
 		weight, ok := s.itemWeightMap[string(item.Id)]
-		if ok {
-			item.Score = weight * item.Score
+		if ok && weight > 0 {
+			// weight > 1 means "boost" (increase score). Multiplication works for positive
+			// scores but inverts direction for negative scores (e.g. logit-based RankScore):
+			// -25 * 1.5 = -37.5 would suppress the boosted item instead of promoting it.
+			// Fix: for negative scores, divide by weight so the score moves toward 0,
+			// preserving the "boost / suppress" semantics across sign.
+			if item.Score >= 0 {
+				item.Score = weight * item.Score
+			} else {
+				item.Score = item.Score / weight
+			}
 		}
 	}
 
