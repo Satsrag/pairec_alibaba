@@ -11,6 +11,7 @@ import (
 
 	"github.com/alibaba/pairec/v2/algorithm"
 	"github.com/alibaba/pairec/v2/algorithm/eas"
+	"github.com/alibaba/pairec/v2/algorithm/eas/easyrec"
 	"github.com/alibaba/pairec/v2/algorithm/response"
 	"github.com/alibaba/pairec/v2/context"
 	"github.com/alibaba/pairec/v2/log"
@@ -97,12 +98,27 @@ func (r *OnlineVectorRecall) GetCandidateItems(user *module.User, context *conte
 	}
 
 	r.loadUserFeatures(user, context)
+	userFeats := user.MakeUserFeatures2()
+	var featNames []string
+	for k, v := range userFeats {
+		val := fmt.Sprintf("%v", v)
+		if len(val) > 50 {
+			val = val[:50] + "..."
+		}
+		featNames = append(featNames, fmt.Sprintf("%s=%s", k, val))
+	}
+	log.Info(fmt.Sprintf("requestId=%s\tmodule=OnlineVectorRecall\tname=%s\tuser_feature_count=%d\tuid=%s\tfeatures=%s",
+		context.RecommendId, r.modelName, len(userFeats), string(user.Id), strings.Join(featNames, "|")))
 	// second invoke eas model
 	algoGenerator := rank.CreateAlgoDataGenerator(r.recallAlgoType, nil)
 	algoGenerator.SetItemFeatures(nil)
 	algoGenerator.AddFeatures(nil, nil, user.MakeUserFeatures2())
 	algoData := algoGenerator.GeneratorAlgoData()
-	algoRet, err := algorithm.Run(r.recallAlgo, algoData.GetFeatures())
+	easyrecRequest := algoData.GetFeatures().(*easyrec.PBRequest)
+	easyrecRequest.FaissNeighNum = int32(r.recallCount)
+	log.Info(fmt.Sprintf("requestId=%s\tmodule=OnlineVectorRecall\tname=%s\tpb_user_features=%d\tpb_faiss_neigh_num=%d\tuid=%s",
+		context.RecommendId, r.modelName, len(easyrecRequest.UserFeatures), easyrecRequest.FaissNeighNum, string(user.Id)))
+	algoRet, err := algorithm.Run(r.recallAlgo, easyrecRequest)
 	if err != nil {
 		context.LogError(fmt.Sprintf("requestId=%s\tmodule=OnlineVectorRecall\tname=%s\terr=%v", context.RecommendId, r.modelName, err))
 	} else {
