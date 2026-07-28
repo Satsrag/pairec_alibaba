@@ -79,6 +79,11 @@ func NewPredictClient(endpointName string, serviceName string) *PredictClient {
 			Timeout: 5000 * time.Millisecond,
 			Transport: &http.Transport{
 				MaxConnsPerHost: 100,
+				// Gateway LB is per-connection: a reused keep-alive connection pins
+				// every batch of one feed request to a single backend pod, starving
+				// the other replicas. Force a fresh connection per request so the
+				// gateway load-balances each batch independently across instances.
+				DisableKeepAlives: true,
 			},
 		},
 	}
