@@ -3,8 +3,10 @@ package recconf
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
+	"strings"
 
 	"github.com/alibaba/pairec/v2/config"
 )
@@ -959,7 +961,10 @@ func loadConfigFromFile(filePath string) error {
 	if err != nil {
 		return err
 	}
-	rawdata := configer.RawData()
+	rawdata, err := expandAccessKeyPlaceholders(configer.RawData())
+	if err != nil {
+		return err
+	}
 
 	err = json.Unmarshal(rawdata, Config)
 	if err != nil {
@@ -967,6 +972,26 @@ func loadConfigFromFile(filePath string) error {
 	}
 
 	return nil
+}
+
+// expandAccessKeyPlaceholders replaces ${AccessKey} / ${AccessSecret} with the env vars of the same name,
+// the same convention loadConfigFromConfigServer uses, so the config file in the repo carries no plaintext AK.
+// A placeholder without its env var is an error: starting with an unusable key would make every
+// FeatureStore / SLS call fail silently.
+func expandAccessKeyPlaceholders(raw []byte) ([]byte, error) {
+	data := string(raw)
+	for _, name := range []string{"AccessKey", "AccessSecret"} {
+		placeholder := "${" + name + "}"
+		if !strings.Contains(data, placeholder) {
+			continue
+		}
+		value := os.Getenv(name)
+		if value == "" {
+			return nil, fmt.Errorf("config uses %s but env %s is empty", placeholder, name)
+		}
+		data = strings.ReplaceAll(data, placeholder, value)
+	}
+	return []byte(data), nil
 }
 
 // LoadConfig load config from file or pairec config server
