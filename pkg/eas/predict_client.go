@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"sync/atomic"
 	"time"
+
+	"github.com/alibaba/pairec/v2/pkg/requesttrace"
 )
 
 const (
@@ -209,6 +211,16 @@ func (p *PredictClient) generateSignature(requestData []byte) map[string]string 
 // BytesPredict send the raw request data in byte array through http connections,
 // retry the request automatically when an error occurs
 func (p *PredictClient) BytesPredict(requestData []byte) ([]byte, error) {
+	return p.bytesPredict(requestData, nil)
+}
+
+// BytesPredictWithTrace attaches request-local correlation headers. The trace
+// remains unchanged across retries and never mutates the shared headers map.
+func (p *PredictClient) BytesPredictWithTrace(requestData []byte, trace requesttrace.Trace) ([]byte, error) {
+	return p.bytesPredict(requestData, &trace)
+}
+
+func (p *PredictClient) bytesPredict(requestData []byte, trace *requesttrace.Trace) ([]byte, error) {
 	host := p.tryNext("")
 	headers := p.generateSignature(requestData)
 	for i := 0; i <= p.retryCount; i++ {
@@ -239,6 +251,9 @@ func (p *PredictClient) BytesPredict(requestData []byte) ([]byte, error) {
 
 		for headerName, headerValue := range p.headers {
 			req.Header.Set(headerName, headerValue)
+		}
+		if trace != nil {
+			trace.SetHeaders(req.Header)
 		}
 
 		if p.host != "" {

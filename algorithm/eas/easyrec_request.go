@@ -9,6 +9,7 @@ import (
 	"github.com/alibaba/pairec/v2/algorithm/eas/easyrec"
 	"github.com/alibaba/pairec/v2/config"
 	"github.com/alibaba/pairec/v2/pkg/eas"
+	"github.com/alibaba/pairec/v2/pkg/requesttrace"
 	proto "github.com/golang/protobuf/proto"
 )
 
@@ -18,6 +19,14 @@ type EasyrecRequest struct {
 }
 
 func (r *EasyrecRequest) Invoke(requestData interface{}) (response interface{}, err error) {
+	return r.invoke(requestData, nil)
+}
+
+func (r *EasyrecRequest) InvokeWithTrace(requestData interface{}, trace requesttrace.Trace) (interface{}, error) {
+	return r.invoke(requestData, &trace)
+}
+
+func (r *EasyrecRequest) invoke(requestData interface{}, trace *requesttrace.Trace) (response interface{}, err error) {
 	request, ok := requestData.(*easyrec.PBRequest)
 	if !ok {
 		err = errors.New("requestData is not easyrec.PBRequest type")
@@ -35,7 +44,12 @@ func (r *EasyrecRequest) Invoke(requestData interface{}) (response interface{}, 
 		config.AppConfig.Once.Do(func() { warmupFunc(data) })
 	}
 
-	body, err := r.EasClient.BytesPredict(data)
+	var body []byte
+	if trace == nil {
+		body, err = r.EasClient.BytesPredict(data)
+	} else {
+		body, err = r.EasClient.BytesPredictWithTrace(data, *trace)
+	}
 	if err != nil {
 		return
 	}

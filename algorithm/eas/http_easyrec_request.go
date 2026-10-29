@@ -12,6 +12,7 @@ import (
 
 	"github.com/alibaba/pairec/v2/algorithm/eas/easyrec"
 	"github.com/alibaba/pairec/v2/config"
+	"github.com/alibaba/pairec/v2/pkg/requesttrace"
 	proto "github.com/golang/protobuf/proto"
 )
 
@@ -20,6 +21,14 @@ type HttpEasyrecRequest struct {
 }
 
 func (r *HttpEasyrecRequest) Invoke(requestData interface{}) (response interface{}, err error) {
+	return r.invoke(requestData, nil)
+}
+
+func (r *HttpEasyrecRequest) InvokeWithTrace(requestData interface{}, trace requesttrace.Trace) (interface{}, error) {
+	return r.invoke(requestData, &trace)
+}
+
+func (r *HttpEasyrecRequest) invoke(requestData interface{}, trace *requesttrace.Trace) (response interface{}, err error) {
 	request, ok := requestData.(*easyrec.PBRequest)
 	if !ok {
 		err = errors.New("requestData is not easyrec.PBRequest type")
@@ -45,6 +54,9 @@ func (r *HttpEasyrecRequest) Invoke(requestData interface{}) (response interface
 		"Authorization": {r.auth},
 	}
 	req.Header = headers
+	if trace != nil {
+		trace.SetHeaders(req.Header)
+	}
 
 	easClient.Timeout = r.timeout
 

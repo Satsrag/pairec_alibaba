@@ -10,6 +10,7 @@ import (
 
 	"github.com/alibaba/pairec/v2/log"
 	"github.com/alibaba/pairec/v2/pkg/eas"
+	"github.com/alibaba/pairec/v2/pkg/requesttrace"
 	tensorflow_serving "github.com/alibaba/pairec/v2/pkg/tensorflow_serving/apis"
 	"github.com/alibaba/pairec/v2/recconf"
 	"google.golang.org/grpc"
@@ -188,6 +189,14 @@ func (m *EasModel) Init(conf *recconf.AlgoConfig) error {
 	return errors.New("not found eas Processor:" + conf.EasConf.Processor)
 }
 func (m *EasModel) Run(algoData interface{}) (interface{}, error) {
+	return m.run(algoData, nil)
+}
+
+func (m *EasModel) RunWithTrace(algoData interface{}, trace requesttrace.Trace) (interface{}, error) {
+	return m.run(algoData, &trace)
+}
+
+func (m *EasModel) run(algoData interface{}, trace *requesttrace.Trace) (interface{}, error) {
 	retryTimes := m.retryTimes
 
 	var (
@@ -197,7 +206,13 @@ func (m *EasModel) Run(algoData interface{}) (interface{}, error) {
 
 	for {
 		retryTimes--
-		data, err = m.request.Invoke(algoData)
+		if traced, ok := m.request.(interface {
+			InvokeWithTrace(interface{}, requesttrace.Trace) (interface{}, error)
+		}); trace != nil && ok {
+			data, err = traced.InvokeWithTrace(algoData, *trace)
+		} else {
+			data, err = m.request.Invoke(algoData)
+		}
 		if err != nil && retryTimes == 0 {
 			return data, err
 		} else if err == nil {

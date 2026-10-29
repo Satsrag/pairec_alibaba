@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alibaba/pairec/v2/algorithm"
 	"github.com/alibaba/pairec/v2/algorithm/eas"
 	"github.com/alibaba/pairec/v2/algorithm/response"
 	"github.com/alibaba/pairec/v2/context"
@@ -116,7 +115,7 @@ func (r *RankService) Rank(user *module.User, items []*module.Item, context *con
 				wg.Add(1)
 				go func(algo string) {
 					defer wg.Done()
-					ret, err := algorithm.Run(algo, algoData.GetFeatures())
+					ret, err := rank.RunAlgoBatch(algo, algoData, context)
 					if err != nil {
 						log.Error(fmt.Sprintf("requestId=%s\terror=run algorithm error(%v)", context.RecommendId, err))
 						algoData.SetError(err)

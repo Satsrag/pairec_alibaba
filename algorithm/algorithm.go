@@ -11,6 +11,7 @@ import (
 	"github.com/alibaba/pairec/v2/algorithm/seldon"
 	"github.com/alibaba/pairec/v2/algorithm/tfserving"
 	"github.com/alibaba/pairec/v2/log"
+	"github.com/alibaba/pairec/v2/pkg/requesttrace"
 	"github.com/alibaba/pairec/v2/recconf"
 	"github.com/alibaba/pairec/v2/utils"
 )
@@ -105,6 +106,16 @@ func (a *AlgorithmFactory) initAlgo(conf recconf.AlgoConfig) (IAlgorithm, error)
 	return algo, nil
 }
 func (a *AlgorithmFactory) Run(name string, algoData interface{}) (interface{}, error) {
+	return a.run(name, algoData, nil)
+}
+
+// RunWithTrace adds optional correlation metadata without changing request data
+// transformations or requiring other algorithm implementations to support it.
+func (a *AlgorithmFactory) RunWithTrace(name string, algoData interface{}, trace requesttrace.Trace) (interface{}, error) {
+	return a.run(name, algoData, &trace)
+}
+
+func (a *AlgorithmFactory) run(name string, algoData interface{}, trace *requesttrace.Trace) (interface{}, error) {
 	a.mutex.RLock()
 	algo, found := a.algorithms[name]
 	f, funcFound := a.requestDataFuncs[name]
@@ -114,7 +125,14 @@ func (a *AlgorithmFactory) Run(name string, algoData interface{}) (interface{}, 
 	}
 	// if find request data func
 	if funcFound {
-		return algo.Run(f(name, algoData))
+		algoData = f(name, algoData)
+	}
+	if trace != nil {
+		if traced, ok := algo.(interface {
+			RunWithTrace(interface{}, requesttrace.Trace) (interface{}, error)
+		}); ok {
+			return traced.RunWithTrace(algoData, *trace)
+		}
 	}
 	return algo.Run(algoData)
 }
@@ -125,6 +143,10 @@ func Load(config *recconf.RecommendConfig) {
 }
 func Run(name string, algoData interface{}) (interface{}, error) {
 	return algoFactory.Run(name, algoData)
+}
+
+func RunWithTrace(name string, algoData interface{}, trace requesttrace.Trace) (interface{}, error) {
+	return algoFactory.RunWithTrace(name, algoData, trace)
 }
 func AddAlgo(conf recconf.AlgoConfig) {
 	algoFactory.mutex.Lock()
