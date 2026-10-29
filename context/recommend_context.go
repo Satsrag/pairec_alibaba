@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/alibaba/pairec/v2/log"
+	"github.com/alibaba/pairec/v2/pkg/requesttrace"
 	"github.com/alibaba/pairec/v2/recconf"
 	"github.com/aliyun/aliyun-pairec-config-go-sdk/v2/model"
 	"github.com/tidwall/gjson"
@@ -16,6 +18,7 @@ type IParam interface {
 	GetParameter(name string) interface{}
 }
 type RecommendContext struct {
+	rankBatchSeq     uint64
 	Debug            bool
 	Size             int
 	Param            IParam
@@ -26,6 +29,16 @@ type RecommendContext struct {
 	Log              []string
 	mu               sync.RWMutex
 	contexParams     map[string]interface{}
+}
+
+// NewRankBatchTrace allocates a correlation ID across all rank services using
+// this request, including concurrently running pipelines. It does not affect
+// model inputs, batching, cancellation, or recommendation results.
+func (r *RecommendContext) NewRankBatchTrace() requesttrace.Trace {
+	return requesttrace.Trace{
+		RequestID: r.RecommendId,
+		BatchID:   fmt.Sprintf("rank-%d", atomic.AddUint64(&r.rankBatchSeq, 1)),
+	}
 }
 
 func NewRecommendContext() *RecommendContext {
