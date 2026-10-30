@@ -57,11 +57,56 @@ func (a *cancelRecommendAlgo) RunWithTrace(_ interface{}, trace requesttrace.Tra
 	return nil, trace.RequestContext().Err()
 }
 
-type cancelCountingSort struct{ calls atomic.Int32 }
+type cancelCountingSort struct {
+	calls  atomic.Int32
+	cancel stdcontext.CancelFunc
+}
 
 func (s *cancelCountingSort) Sort(*sort.SortData) error {
 	s.calls.Add(1)
+	if s.cancel != nil {
+		s.cancel()
+	}
 	return nil
+}
+
+func TestTraceCallerCancelDuringSortSkipsCleanHooks(t *testing.T) {
+	caller, cancel := stdcontext.WithCancel(stdcontext.Background())
+	defer cancel()
+	countingSort := &cancelCountingSort{cancel: cancel}
+	sortName := fmt.Sprintf("cancel-at-sort-%p", countingSort)
+	sort.RegisterSort(sortName, countingSort)
+	recall.RegisterRecall("cancel-sort-recall", cancelRecallFunc(func(*module.User, *context.RecommendContext) []*module.Item {
+		return []*module.Item{module.NewItem("item-a")}
+	}))
+	config := &recconf.RecommendConfig{
+		SceneConfs: map[string]map[string]recconf.CategoryConfig{"cancel-recommend-test": {"default": {RecallNames: []string{"cancel-sort-recall"}}}},
+		SortNames:  map[string][]string{"cancel-recommend-test": {sortName}},
+	}
+	savedConfig, savedScenes, savedHooks := recconf.Config, scenes, hook.RecommendCleanHooks
+	recconf.Config = config
+	scenes = make(map[string]*Scene)
+	hookCalled := make(chan struct{}, 1)
+	hook.RecommendCleanHooks = []hook.RecommendCleanHookFunc{func(*context.RecommendContext, ...interface{}) { hookCalled <- struct{}{} }}
+	Load(config)
+	sort.Load(config)
+	pipeline.LoadPipelineConfigs(config)
+	t.Cleanup(func() {
+		recconf.Config, scenes, hook.RecommendCleanHooks = savedConfig, savedScenes, savedHooks
+		pipeline.LoadPipelineConfigs(savedConfig)
+	})
+	ctx := context.NewRecommendContext()
+	ctx.SetRequestContext(caller)
+	ctx.Param, ctx.Config, ctx.Size = cancelRecommendParam{}, config, 1
+	got := NewUserRecommendService().Recommend(ctx)
+	if got != nil || countingSort.calls.Load() != 1 || caller.Err() == nil {
+		t.Fatal("caller cancellation during sort did not discard the result")
+	}
+	select {
+	case <-hookCalled:
+		t.Fatal("canceled results reached recommendation clean hooks")
+	case <-time.After(50 * time.Millisecond):
+	}
 }
 
 func TestTraceCanceledRecommendWaitsForPipelineAndSkipsDeliveryWork(t *testing.T) {

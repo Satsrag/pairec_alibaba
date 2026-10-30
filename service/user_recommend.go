@@ -153,6 +153,9 @@ func (r *UserRecommendService) Recommend(context *context.RecommendContext) []*m
 
 	// sort items
 	items = r.Sort(user, items, context)
+	if context.RequestContext().Err() != nil {
+		return nil
+	}
 
 	if metrics.Enabled() {
 		metrics.SortDurSecs.WithLabelValues(scene, expId).Observe(time.Since(sortStart).Seconds())
