@@ -48,9 +48,13 @@ type AlgoDataBase struct {
 }
 
 func (a *AlgoDataBase) SetError(err error) {
+	a.Mutex.Lock()
+	defer a.Mutex.Unlock()
 	a.Err = err
 }
 func (a *AlgoDataBase) Error() error {
+	a.Mutex.Lock()
+	defer a.Mutex.Unlock()
 	return a.Err
 }
 func (a *AlgoDataBase) SetAlgoResult(algoName string, results []response.AlgoResponse) {

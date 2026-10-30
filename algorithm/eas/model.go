@@ -205,6 +205,11 @@ func (m *EasModel) run(algoData interface{}, trace *requesttrace.Trace) (interfa
 	)
 
 	for {
+		if trace != nil {
+			if canceled := trace.RequestContext().Err(); canceled != nil {
+				return nil, canceled
+			}
+		}
 		retryTimes--
 		if traced, ok := m.request.(interface {
 			InvokeWithTrace(interface{}, requesttrace.Trace) (interface{}, error)
@@ -212,6 +217,13 @@ func (m *EasModel) run(algoData interface{}, trace *requesttrace.Trace) (interfa
 			data, err = traced.InvokeWithTrace(algoData, *trace)
 		} else {
 			data, err = m.request.Invoke(algoData)
+		}
+		if err != nil && trace != nil {
+			// The HTTP client's own timeout still uses the original retry policy.
+			// Only cancellation of the parent request stops further attempts.
+			if canceled := trace.RequestContext().Err(); canceled != nil {
+				return nil, canceled
+			}
 		}
 		if err != nil && retryTimes == 0 {
 			return data, err

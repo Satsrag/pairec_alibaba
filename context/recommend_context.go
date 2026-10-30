@@ -1,6 +1,7 @@
 package context
 
 import (
+	stdcontext "context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -29,15 +30,35 @@ type RecommendContext struct {
 	Log              []string
 	mu               sync.RWMutex
 	contexParams     map[string]interface{}
+	requestContext   stdcontext.Context
+}
+
+// SetRequestContext attaches the caller's lifetime before recommendation starts.
+// Nil retains the legacy behavior with no caller cancellation.
+func (r *RecommendContext) SetRequestContext(ctx stdcontext.Context) {
+	r.mu.Lock()
+	r.requestContext = ctx
+	r.mu.Unlock()
+}
+
+func (r *RecommendContext) RequestContext() stdcontext.Context {
+	r.mu.RLock()
+	ctx := r.requestContext
+	r.mu.RUnlock()
+	if ctx == nil {
+		return stdcontext.Background()
+	}
+	return ctx
 }
 
 // NewRankBatchTrace allocates a correlation ID across all rank services using
 // this request, including concurrently running pipelines. It does not affect
-// model inputs, batching, cancellation, or recommendation results.
+// model inputs or batching. A bound request context cancels abandoned calls.
 func (r *RecommendContext) NewRankBatchTrace() requesttrace.Trace {
 	return requesttrace.Trace{
 		RequestID: r.RecommendId,
 		BatchID:   fmt.Sprintf("rank-%d", atomic.AddUint64(&r.rankBatchSeq, 1)),
+		Context:   r.RequestContext(),
 	}
 }
 

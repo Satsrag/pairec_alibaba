@@ -1,6 +1,7 @@
 package rank_test
 
 import (
+	stdcontext "context"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -85,6 +86,9 @@ func TestTraceRankBatchesKeepScoresAndOrder(t *testing.T) {
 	recconf.Config = &recconf.RecommendConfig{RankConf: map[string]recconf.RankConfig{"trace-test": config}}
 	t.Cleanup(func() { recconf.Config = saved })
 	ctx := context.NewRecommendContext()
+	caller, cancel := stdcontext.WithCancel(stdcontext.Background())
+	defer cancel()
+	ctx.SetRequestContext(caller)
 	ctx.RecommendId = "request-a"
 	ctx.Param = traceRankParam{}
 	user := module.NewUser("test-user")
@@ -110,7 +114,7 @@ func TestTraceRankBatchesKeepScoresAndOrder(t *testing.T) {
 	seen := make(map[string]bool)
 	counts := map[int]int{}
 	for _, call := range algo.calls {
-		if call.trace.RequestID != ctx.RecommendId || !requesttrace.ValidID(call.trace.BatchID) || seen[call.trace.BatchID] {
+		if call.trace.Context != caller || call.trace.RequestID != ctx.RecommendId || !requesttrace.ValidID(call.trace.BatchID) || seen[call.trace.BatchID] {
 			t.Fatalf("invalid or reused batch identity: %+v", call.trace)
 		}
 		seen[call.trace.BatchID] = true
@@ -118,5 +122,11 @@ func TestTraceRankBatchesKeepScoresAndOrder(t *testing.T) {
 	}
 	if len(seen) != 12 || !reflect.DeepEqual(counts, map[int]int{1: 4, 2: 8}) {
 		t.Fatalf("batch boundaries changed: calls=%d sizes=%v", len(seen), counts)
+	}
+	cancel()
+	rank.NewRankService().Rank(user, items, ctx)
+	pipeline.NewRankService(&recconf.PipelineConfig{Name: "trace-pipeline", RankConf: config}).Rank(user, items, ctx)
+	if len(algo.calls) != 12 {
+		t.Fatal("abandoned standard/pipeline batches invoked the algorithm")
 	}
 }
