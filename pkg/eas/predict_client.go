@@ -2,6 +2,7 @@ package eas
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -221,9 +222,19 @@ func (p *PredictClient) BytesPredictWithTrace(requestData []byte, trace requestt
 }
 
 func (p *PredictClient) bytesPredict(requestData []byte, trace *requesttrace.Trace) ([]byte, error) {
+	ctx := context.Background()
+	if trace != nil {
+		ctx = trace.RequestContext()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	host := p.tryNext("")
 	headers := p.generateSignature(requestData)
 	for i := 0; i <= p.retryCount; i++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if i != 0 {
 			host = p.tryNext(host)
 		}
@@ -235,7 +246,7 @@ func (p *PredictClient) bytesPredict(requestData []byte, trace *requesttrace.Tra
 
 		url := p.createUrl(host)
 
-		req, err := http.NewRequest("POST", url, bytes.NewReader(requestData))
+		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(requestData))
 		if err != nil {
 			// retry
 			if i != p.retryCount {
@@ -262,6 +273,9 @@ func (p *PredictClient) bytesPredict(requestData []byte, trace *requesttrace.Tra
 
 		resp, err := p.client.Do(req)
 		if err != nil {
+			if canceled := ctx.Err(); canceled != nil {
+				return nil, canceled
+			}
 			// retry
 			if i != p.retryCount {
 				continue
@@ -270,15 +284,17 @@ func (p *PredictClient) bytesPredict(requestData []byte, trace *requesttrace.Tra
 		}
 
 		body, err := ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
 		if err != nil {
+			if canceled := ctx.Err(); canceled != nil {
+				return nil, canceled
+			}
 			// retry
 			if i != p.retryCount {
 				continue
 			}
 			return nil, NewPredictError(ErrorCodeReadResponse, url, err.Error())
 		}
-		resp.Body.Close()
-
 		if resp.StatusCode != 200 {
 			// retry
 			if i != p.retryCount {

@@ -2,6 +2,7 @@ package eas
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -45,7 +46,11 @@ func (r *HttpEasyrecRequest) invoke(requestData interface{}, trace *requesttrace
 		}
 		config.AppConfig.Once.Do(func() { warmupFunc(data) })
 	}
-	req, err := http.NewRequest("POST", r.url, bytes.NewBuffer(data))
+	ctx := context.Background()
+	if trace != nil {
+		ctx = trace.RequestContext()
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", r.url, bytes.NewBuffer(data))
 	if err != nil {
 		return
 	}
@@ -58,9 +63,15 @@ func (r *HttpEasyrecRequest) invoke(requestData interface{}, trace *requesttrace
 		trace.SetHeaders(req.Header)
 	}
 
-	easClient.Timeout = r.timeout
-
-	resp, err := easClient.Do(req)
+	// Keep the connection pool shared, but never mutate a client's timeout while
+	// another request uses it.
+	client := http.Client{
+		Transport:     easClient.Transport,
+		CheckRedirect: easClient.CheckRedirect,
+		Jar:           easClient.Jar,
+		Timeout:       r.timeout,
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return
 	}

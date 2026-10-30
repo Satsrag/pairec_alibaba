@@ -2,6 +2,7 @@ package eas
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -70,7 +71,9 @@ func TestTraceEasyRecModelHTTPParity(t *testing.T) {
 			if legacyHeaders.Get(requesttrace.RequestIDHeader) != "" || legacyHeaders.Get(requesttrace.BatchIDHeader) != "" {
 				t.Fatal("legacy model request unexpectedly acquired trace metadata")
 			}
-			traced, err := model.RunWithTrace(request, requesttrace.Trace{RequestID: "request-a", BatchID: "rank-1"})
+			caller, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			traced, err := model.RunWithTrace(request, requesttrace.Trace{RequestID: "request-a", BatchID: "rank-1", Context: caller})
 			if err != nil {
 				t.Fatal(err)
 			}

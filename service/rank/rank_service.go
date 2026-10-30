@@ -265,7 +265,9 @@ func (r *RankService) Rank(user *module.User, items []*module.Item, context *con
 					defer wg.Done()
 					ret, err := RunAlgoBatch(algo, algoData, context)
 					if err != nil {
-						log.Error(fmt.Sprintf("requestId=%s\terror=run algorithm error(%v)", context.RecommendId, err))
+						if context.RequestContext().Err() == nil {
+							log.Error(fmt.Sprintf("requestId=%s\terror=run algorithm error(%v)", context.RecommendId, err))
+						}
 						algoData.SetError(err)
 					} else {
 						if result, ok := ret.([]response.AlgoResponse); ok {

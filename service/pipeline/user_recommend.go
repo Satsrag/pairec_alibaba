@@ -40,6 +40,9 @@ func NewUserRecommendService(config *recconf.PipelineConfig) *UserRecommendServi
 	return &service
 }
 func (r *UserRecommendService) Recommend(user *module.User, context *context.RecommendContext, debugService *debug.DebugService) []*module.Item {
+	if context.RequestContext().Err() != nil {
+		return nil
+	}
 
 	start := time.Now()
 	var items []*module.Item
@@ -67,6 +70,9 @@ func (r *UserRecommendService) Recommend(user *module.User, context *context.Rec
 	items = r.featureService.LoadFeatures(user, items, context)
 
 	r.rankService.Rank(user, items, context)
+	if context.RequestContext().Err() != nil {
+		return nil
+	}
 
 	r.coldStartRankService.Rank(user, items, context)
 

@@ -1,7 +1,10 @@
 // Package requesttrace carries correlation metadata outside model inputs.
 package requesttrace
 
-import "net/http"
+import (
+	"context"
+	"net/http"
+)
 
 const (
 	RequestIDHeader = "X-Request-ID"
@@ -13,6 +16,16 @@ const (
 type Trace struct {
 	RequestID string
 	BatchID   string
+	// Context is optional and never forms part of model data or HTTP headers.
+	Context context.Context `json:"-"`
+}
+
+// RequestContext preserves legacy calls, which have no caller cancellation.
+func (t Trace) RequestContext() context.Context {
+	if t.Context != nil {
+		return t.Context
+	}
+	return context.Background()
 }
 
 // ValidID permits only bounded, single-line ASCII correlation identifiers.

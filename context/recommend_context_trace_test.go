@@ -1,11 +1,33 @@
 package context
 
 import (
+	stdcontext "context"
 	"sync"
 	"testing"
 
 	"github.com/alibaba/pairec/v2/pkg/requesttrace"
 )
+
+func TestRankBatchTraceCallerContext(t *testing.T) {
+	r := NewRecommendContext()
+	if r.RequestContext().Err() != nil || r.NewRankBatchTrace().RequestContext().Done() != nil {
+		t.Fatal("legacy context unexpectedly has a cancellation source")
+	}
+	caller, cancel := stdcontext.WithCancel(stdcontext.Background())
+	r.SetRequestContext(caller)
+	trace := r.NewRankBatchTrace()
+	if r.RequestContext() != caller || trace.Context != caller {
+		t.Fatal("caller context was not propagated to the batch")
+	}
+	cancel()
+	if trace.RequestContext().Err() != stdcontext.Canceled {
+		t.Fatal("batch did not observe caller cancellation")
+	}
+	r.SetRequestContext(nil)
+	if r.RequestContext().Err() != nil {
+		t.Fatal("nil did not restore legacy behavior")
+	}
+}
 
 func TestRankBatchTraceConcurrentIDs(t *testing.T) {
 	r := NewRecommendContext()

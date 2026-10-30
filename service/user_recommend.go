@@ -43,6 +43,9 @@ func NewUserRecommendService() *UserRecommendService {
 }
 
 func (r *UserRecommendService) Recommend(context *context.RecommendContext) []*module.Item {
+	if context.RequestContext().Err() != nil {
+		return nil
+	}
 	start := time.Now()
 
 	var scene, expId string
@@ -137,6 +140,11 @@ func (r *UserRecommendService) Recommend(context *context.RecommendContext) []*m
 	}
 
 	wg.Wait()
+	// The pipeline must finish before returning; canceled HTTP calls unblock
+	// its rank work too. Never sort or log abandoned results as recommendations.
+	if context.RequestContext().Err() != nil {
+		return nil
+	}
 	items = r.mergePipelineItems(items, pipelineItems)
 
 	debugService.WriteRankLog(user, items, context)
